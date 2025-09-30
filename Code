@@ -1,0 +1,61 @@
+import pandas as pd
+import numpy as np
+from sklearn.model_selection import train_test_split, cross_val_score
+from sklearn.preprocessing import StandardScaler
+from sklearn.impute import SimpleImputer
+from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
+from sklearn.metrics import mean_squared_error
+from sklearn.pipeline import Pipeline
+from sklearn.compose import ColumnTransformer
+from sklearn.preprocessing import OneHotEncoder
+
+# Load data
+train = pd.read_csv('train.csv')
+test = pd.read_csv('test.csv')
+
+# Separate target
+X = train.drop(['SalePrice', 'Id'], axis=1)
+y = np.log1p(train['SalePrice'])  # log-transform target
+X_test = test.drop('Id', axis=1)
+
+# Identify numerical and categorical columns
+num_cols = X.select_dtypes(include=['int64', 'float64']).columns
+cat_cols = X.select_dtypes(include=['object']).columns
+
+# Preprocessing pipelines
+num_pipeline = Pipeline([
+    ('imputer', SimpleImputer(strategy='median')),
+    ('scaler', StandardScaler())
+])
+
+cat_pipeline = Pipeline([
+    ('imputer', SimpleImputer(strategy='most_frequent')),
+    ('encoder', OneHotEncoder(handle_unknown='ignore'))
+])
+
+preprocessor = ColumnTransformer([
+    ('num', num_pipeline, num_cols),
+    ('cat', cat_pipeline, cat_cols)
+])
+
+# Model pipeline
+model = Pipeline([
+    ('preprocess', preprocessor),
+    ('regressor', GradientBoostingRegressor(n_estimators=300, learning_rate=0.05, max_depth=4, random_state=42))
+])
+
+# Train model
+model.fit(X, y)
+
+# Predict on test set
+preds = model.predict(X_test)
+final_preds = np.expm1(preds)  # reverse log-transform
+
+# Prepare submission
+submission = pd.DataFrame({
+    'Id': test['Id'],
+    'SalePrice': final_preds
+})
+
+submission.to_csv('submission.csv', index=False)
+print("✅ Submission file created: submission.csv")
